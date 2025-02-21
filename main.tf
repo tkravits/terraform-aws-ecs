@@ -10,3 +10,14 @@ provider "aws" {
   profile = "terraform"
   region  = "us-east-1"
 }
+
+module "vpc" {
+  source = "./modules/networking"
+}
+
+module "ecs" {
+  source = "./modules/ecs"
+  vpc_id = module.vpc.aws_vpc.id
+  cidr_block = module.vpc.aws_vpc.cidr_block
+  subnet = module.vpc.aws_subnet.public
+}
