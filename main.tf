@@ -19,5 +19,5 @@ module "ecs" {
   source = "./modules/ecs"
   vpc_id = module.vpc.aws_vpc.id
   cidr_block = module.vpc.aws_vpc.cidr_block
-  subnet = module.vpc.aws_subnet.public
+  subnets = module.vpc.aws_subnets
 }

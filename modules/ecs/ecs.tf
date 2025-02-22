@@ -74,7 +74,7 @@ resource "aws_launch_template" "ecs_ec2" {
 
 resource "aws_autoscaling_group" "ecs" {
   name_prefix               = "demo-ecs-asg-"
-  vpc_zone_identifier       = var.subnet[*].id
+  vpc_zone_identifier       = var.subnets[*].id
   min_size                  = 2
   max_size                  = 8
   health_check_grace_period = 0
@@ -218,7 +218,7 @@ resource "aws_ecs_service" "app" {
 
   network_configuration {
     security_groups = [aws_security_group.ecs_task.id]
-    subnets         = var.subnet[*].id
+    subnets         = var.subnets[*].id
   }
 
   capacity_provider_strategy {
@@ -272,7 +272,7 @@ resource "aws_security_group" "http" {
 resource "aws_lb" "main" {
   name               = "demo-alb"
   load_balancer_type = "application"
-  subnets            = var.subnet[*].id
+  subnets            = var.subnets[*].id
   security_groups    = [aws_security_group.http.id]
 }
 

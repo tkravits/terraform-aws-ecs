@@ -6,5 +6,14 @@ variable "cidr_block" {
   description = "The IPv4 CIDR block for the VPC"
   type        = string
 }
-variable "subnet" {
+# variable "subnet_id" {
+#   description = "the id for the subnet"
+#   type = string
+# }
+
+variable "subnets" {
+  description = "a list of subnets"
+  type = list(object({
+    id   = string
+  }))
 }
