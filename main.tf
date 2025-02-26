@@ -16,8 +16,8 @@ module "vpc" {
 }
 
 module "ecs" {
-  source = "./modules/ecs"
-  vpc_id = module.vpc.aws_vpc.id
+  source     = "./modules/ecs"
+  vpc_id     = module.vpc.aws_vpc.id
   cidr_block = module.vpc.aws_vpc.cidr_block
-  subnets = module.vpc.aws_subnets
+  subnets    = module.vpc.aws_subnets
 }

@@ -1,11 +1,14 @@
 # --- ECS Cluster ---
-
+# simple ECS cluster
 resource "aws_ecs_cluster" "main" {
   name = "demo-cluster"
 }
 
 # --- ECS Node Role ---
-
+# Generates an IAM policy document in JSON format. This will be attached to 
+# IAM roles under the assume_role_policy. Role Policies need to be in JSON format so instead
+# of creating a json every time, you can use this and attach it to a role
+# this only works for EC2. EC2 needs to assume a role in order to act as an ECS node
 data "aws_iam_policy_document" "ecs_node_doc" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -18,16 +21,21 @@ data "aws_iam_policy_document" "ecs_node_doc" {
   }
 }
 
+# creates the IAM role and grants EC2 permissions to run ECS nodes using the role policy from above
+# AWS does not automatically do this so it needs to be specified
 resource "aws_iam_role" "ecs_node_role" {
   name_prefix        = "demo-ecs-node-role"
   assume_role_policy = data.aws_iam_policy_document.ecs_node_doc.json
 }
 
+# EC2 instance wouldn’t be able to join the ECS cluster or pull container images without this specific policy ARN (service role)
 resource "aws_iam_role_policy_attachment" "ecs_node_role_policy" {
   role       = aws_iam_role.ecs_node_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
 }
 
+# EC2 instances do not directly assume IAM roles—they need an instance profile. 
+# The instance profile acts as a bridge to connect the IAM role to the instance
 resource "aws_iam_instance_profile" "ecs_node" {
   name_prefix = "demo-ecs-node-profile"
   path        = "/ecs/instance/"
@@ -35,34 +43,49 @@ resource "aws_iam_instance_profile" "ecs_node" {
 }
 
 # --- ECS Node SG ---
-
+# creates a security group
+# Security groups are required to control traffic going to and from EC2 instances
 resource "aws_security_group" "ecs_node_sg" {
   name_prefix = "demo-ecs-node-sg-"
   vpc_id      = var.vpc_id
 
-  egress {
-    from_port   = 0
-    to_port     = 65535
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # egress {
+  #   from_port   = 0
+  #   to_port     = 65535
+  #   protocol    = "tcp"
+  #   cidr_blocks = ["0.0.0.0/0"]
+  # }
 }
 
-# --- ECS Launch Template ---
+# Manages an outbound (egress) rule for a security group. Was defining inline for hte ecs_node security group but
+# Terraform best practice recommends separating them as 
+# "they struggle with managing multiple CIDR blocks, and tags and descriptions due to the historical lack of unique IDs."
+# By default AWS security groups allow all outbound traffic but explicitly defining the rule is better for the user
+resource "aws_vpc_security_group_egress_rule" "ecs_node_sg" {
+  security_group_id = aws_security_group.ecs_node_sg.id
 
+    from_port   = 0
+    to_port     = 65535
+    ip_protocol    = "tcp"
+    cidr_ipv4 = "0.0.0.0/0"
+}
+# --- ECS Launch Template ---
+# Retrieves the latest Amazon ECS-Optimized AMI for Amazon Linux 2 from AWS Systems Manager (SSM)
 data "aws_ssm_parameter" "ecs_node_ami" {
   name = "/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id"
 }
-
+# creates the ec2 instances based on the configuration of the launch template and attaches them to the ECS node
 resource "aws_launch_template" "ecs_ec2" {
   name_prefix            = "demo-ecs-ec2-"
   image_id               = data.aws_ssm_parameter.ecs_node_ami.value
   instance_type          = "t2.micro"
   vpc_security_group_ids = [aws_security_group.ecs_node_sg.id]
-
+  # uses the same instance profile and attaches it to the EC2 instance
   iam_instance_profile { arn = aws_iam_instance_profile.ecs_node.arn }
+  # enables cloud monitoring
   monitoring { enabled = true }
 
+  # runs a script that connects the EC2 instance to the ECS cluster created
   user_data = base64encode(<<-EOF
       #!/bin/bash
       echo ECS_CLUSTER=${aws_ecs_cluster.main.name} >> /etc/ecs/ecs.config;
@@ -305,7 +328,3 @@ resource "aws_lb_listener" "http" {
     target_group_arn = aws_lb_target_group.app.id
   }
 }
-
-# output "alb_url" {
-#   value = aws_lb.main.dns_name
-# }
