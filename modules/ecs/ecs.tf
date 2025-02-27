@@ -30,6 +30,7 @@ resource "aws_iam_role" "ecs_node_role" {
 
 # EC2 instance wouldn’t be able to join the ECS cluster or pull container images without this specific policy ARN (service role)
 resource "aws_iam_role_policy_attachment" "ecs_node_role_policy" {
+  count                 = var.ecs_launch_type == "EC2" ? 1 : 0
   role       = aws_iam_role.ecs_node_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
 }
@@ -76,6 +77,7 @@ data "aws_ssm_parameter" "ecs_node_ami" {
 }
 # creates the ec2 instances based on the configuration of the launch template and attaches them to the ECS node
 resource "aws_launch_template" "ecs_ec2" {
+  count                 = var.ecs_launch_type == "EC2" ? 1 : 0
   name_prefix            = "demo-ecs-ec2-"
   image_id               = data.aws_ssm_parameter.ecs_node_ami.value
   instance_type          = "t2.micro"
@@ -97,6 +99,7 @@ resource "aws_launch_template" "ecs_ec2" {
 # creates autoscaling group that will have a min of 2 instances and a max of 8
 # uses health checks but will terminate an instance immediately if it is unhealthy
 resource "aws_autoscaling_group" "ecs" {
+  count                 = var.ecs_launch_type == "EC2" ? 1 : 0
   name_prefix               = "demo-ecs-asg-"
   vpc_zone_identifier       = var.subnets[*].id
   min_size                  = 2
@@ -108,7 +111,7 @@ resource "aws_autoscaling_group" "ecs" {
 
   # use the latest version of the EC2 instances set up
   launch_template {
-    id      = aws_launch_template.ecs_ec2.id
+    id      = aws_launch_template.ecs_ec2[0].id
     version = "$Latest"
   }
 
@@ -129,10 +132,11 @@ resource "aws_autoscaling_group" "ecs" {
 # so now that EC2 can scale, we need to get ECS to scale
 # this links the autoscaling group allowing ECS tasks to scale
 resource "aws_ecs_capacity_provider" "main" {
+  count                 = var.ecs_launch_type == "EC2" ? 1 : 0
   name = "demo-ecs-ec2"
 
   auto_scaling_group_provider {
-    auto_scaling_group_arn         = aws_autoscaling_group.ecs.arn
+    auto_scaling_group_arn         = aws_autoscaling_group.ecs[0].arn
     managed_termination_protection = "DISABLED"
 
     managed_scaling {
@@ -146,11 +150,13 @@ resource "aws_ecs_capacity_provider" "main" {
 
 # creates a scaling strategy for the ECS tasks
 resource "aws_ecs_cluster_capacity_providers" "main" {
+  for_each = var.ecs_launch_type == "EC2" ? toset(["enabled"]) : toset([])
+
   cluster_name       = aws_ecs_cluster.main.name
-  capacity_providers = [aws_ecs_capacity_provider.main.name]
+  capacity_providers = [aws_ecs_capacity_provider.main[0].name]
 
   default_capacity_provider_strategy {
-    capacity_provider = aws_ecs_capacity_provider.main.name
+    capacity_provider = aws_ecs_capacity_provider.main[0].name
     base              = 1
     weight            = 100
   }
@@ -202,6 +208,8 @@ resource "aws_ecs_task_definition" "app" {
   # CPU and memory limits
   cpu                = 256
   memory             = 256
+  requires_compatibilities = var.ecs_launch_type == "FARGATE" ? ["FARGATE"] : ["EC2"]
+
 
   # pulls the latest image from the elastic container registry
   container_definitions = jsonencode([{
@@ -277,12 +285,18 @@ resource "aws_ecs_service" "app" {
     security_groups = [aws_security_group.ecs_task.id]
     subnets         = var.subnets[*].id
   }
-  # 1 instance is always running
-  capacity_provider_strategy {
-    capacity_provider = aws_ecs_capacity_provider.main.name
-    base              = 1
-    weight            = 100
+  # Use EC2 capacity provider if EC2 is chosen, otherwise use Fargate
+  dynamic "capacity_provider_strategy" {
+    for_each = var.ecs_launch_type == "EC2" ? [1] : []
+    content {
+      capacity_provider = aws_ecs_capacity_provider.main[0].name
+      base              = 1
+      weight            = 100
+    }
   }
+
+  launch_type = var.ecs_launch_type == "FARGATE" ? "FARGATE" : null
+
   # distributes tasks over different AZs
   ordered_placement_strategy {
     type  = "spread"
@@ -327,7 +341,7 @@ resource "aws_security_group" "http" {
   # }
 }
 
-resource "aws_vpc_security_group_egress_rule" "ecs_task" {
+resource "aws_vpc_security_group_egress_rule" "http" {
   security_group_id = aws_security_group.http.id
     # Use -1 to specify all protocols. 
     # Note that if ip_protocol is set to -1, it translates to all protocols, all port ranges, and from_port and to_port values should not be defined.
