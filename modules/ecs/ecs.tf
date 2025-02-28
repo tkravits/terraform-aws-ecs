@@ -4,6 +4,7 @@ resource "aws_ecs_cluster" "main" {
   name = "demo-cluster"
 }
 
+
 # --- ECS Node Role ---
 # Generates an IAM policy document in JSON format. This will be attached to 
 # IAM roles under the assume_role_policy. Role Policies need to be in JSON format so instead
@@ -30,11 +31,16 @@ resource "aws_iam_role" "ecs_node_role" {
 
 # EC2 instance wouldn’t be able to join the ECS cluster or pull container images without this specific policy ARN (service role)
 resource "aws_iam_role_policy_attachment" "ecs_node_role_policy" {
-  count                 = var.ecs_launch_type == "EC2" ? 1 : 0
+  count      = var.ecs_launch_type == "EC2" ? 1 : 0
   role       = aws_iam_role.ecs_node_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
 }
 
+resource "aws_iam_role_policy_attachment" "ecs_node_role_policy_fargate" {
+  count      = var.ecs_launch_type == "FARGATE" ? 1 : 0
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy"
+  role       = aws_iam_role.ecs_node_role.name
+}
 # EC2 instances do not directly assume IAM roles—they need an instance profile. 
 # The instance profile acts as a bridge to connect the IAM role to the instance
 resource "aws_iam_instance_profile" "ecs_node" {
@@ -207,7 +213,7 @@ resource "aws_ecs_task_definition" "app" {
   network_mode       = "awsvpc"
   # CPU and memory limits
   cpu                = 256
-  memory             = 256
+  memory             = 512
   requires_compatibilities = var.ecs_launch_type == "FARGATE" ? ["FARGATE"] : ["EC2"]
 
 
@@ -275,7 +281,8 @@ resource "aws_vpc_security_group_egress_rule" "ecs_task" {
 
 # Creates the ECS service which orchestrates the desired number of tasks is running at all times
 # this is looking to have 2 tasks running at all times
-resource "aws_ecs_service" "app" {
+resource "aws_ecs_service" "app_ec2" {
+  count           = var.ecs_launch_type == "EC2" ? 1 : 0
   name            = "app"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.app.arn
@@ -286,16 +293,11 @@ resource "aws_ecs_service" "app" {
     subnets         = var.subnets[*].id
   }
   # Use EC2 capacity provider if EC2 is chosen, otherwise use Fargate
-  dynamic "capacity_provider_strategy" {
-    for_each = var.ecs_launch_type == "EC2" ? [1] : []
-    content {
-      capacity_provider = aws_ecs_capacity_provider.main[0].name
-      base              = 1
-      weight            = 100
-    }
+  capacity_provider_strategy {
+    capacity_provider = aws_ecs_capacity_provider.main[0].name
+    base              = 1
+    weight            = 100
   }
-
-  launch_type = var.ecs_launch_type == "FARGATE" ? "FARGATE" : null
 
   # distributes tasks over different AZs
   ordered_placement_strategy {
@@ -316,6 +318,35 @@ resource "aws_ecs_service" "app" {
   }
 }
 
+
+# Creates the ECS service which orchestrates the desired number of tasks is running at all times
+# this is looking to have 2 tasks running at all times
+resource "aws_ecs_service" "app_fargate" {
+  count           = var.ecs_launch_type == "FARGATE" ? 1 : 0
+  name            = "app"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.app.arn
+  desired_count   = 2
+  # where the tasks should run and the SG associated with the tasks
+  network_configuration {
+    security_groups = [aws_security_group.ecs_task.id]
+    subnets         = var.subnets[*].id
+  }
+
+  launch_type = "FARGATE"
+
+  lifecycle {
+    ignore_changes = [desired_count]
+  }
+  # make sure the load balancer is created first then routes traffic to port 80
+  depends_on = [aws_lb_target_group.app]
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.app.arn
+    container_name   = "app"
+    container_port   = 80
+  }
+}
 # --- ALB ---
 # creates the application load balancer security group that accepts traffic from port 80 and 443
 resource "aws_security_group" "http" {

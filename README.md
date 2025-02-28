@@ -4,14 +4,14 @@ This repo is designed to be a resource to use terraform to create an ECS service
 # After `terraform apply` we need to connect our ECR to our local docker login
 
 ### Get AWS repo url from Terraform outputs
-export REPO=$(terraform output --raw demo_app_repo_url)
+`export REPO=$(terraform output --raw demo_app_repo_url)`
 ### Login to AWS ECR
-aws ecr get-login-password --profile <profile name> --region <region> | docker login --username AWS --password-stdin $REPO
+`aws ecr get-login-password --profile <profile name> --region <region> | docker login --username AWS --password-stdin $REPO`
 ### Pull docker image & push to our ECR
-docker pull --platform linux/amd64 strm/helloworld-http:latest
-docker tag strm/helloworld-http:latest $REPO:latest
-docker push $REPO:latest
+`docker pull --platform linux/amd64 strm/helloworld-http:latest`
+`docker tag strm/helloworld-http:latest $REPO:latest`
+`docker push $REPO:latest`
 
 After all the resources are created and the ECR has the docker image, run 
 `curl $(terraform output --raw alb_url)`
-which will GET the application load balancer and serve back the hostname
+which will perform a GET to the application load balancer and serve back the hostname

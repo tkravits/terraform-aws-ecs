@@ -20,4 +20,5 @@ module "ecs" {
   vpc_id     = module.vpc.aws_vpc.id
   cidr_block = module.vpc.aws_vpc.cidr_block
   subnets    = module.vpc.aws_subnets
+  ecs_launch_type = var.ecs_launch_type
 }
