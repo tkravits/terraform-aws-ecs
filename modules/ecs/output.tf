@@ -18,8 +18,8 @@ output "ecs_node_sg" {
   value = aws_security_group.ecs_node_sg
 }
 
-output "ecr" {
-  value = aws_ecr_repository.app
+output "ecr_url" {
+  value = aws_ecr_repository.app.repository_url
   
 }
 

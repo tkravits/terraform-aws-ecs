@@ -5,6 +5,6 @@ resource "aws_cloudwatch_log_group" "ecs" {
   retention_in_days = 14
 }
 
-output "ecs_cloudwatch_logs" {
-  value = aws_cloudwatch_log_group.ecs
+output "ecs_cloudwatch_logs_name" {
+  value = aws_cloudwatch_log_group.ecs.name
 }

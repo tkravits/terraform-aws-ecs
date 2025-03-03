@@ -66,21 +66,7 @@ resource "aws_vpc_security_group_egress_rule" "http" {
     cidr_ipv4 = "0.0.0.0/0"
 }
 
-resource "aws_vpc_security_group_ingress_rule" "ecs_task" {
-  security_group_id = aws_security_group.ecs_task.id
-    # Use -1 to specify all protocols. 
-    # Note that if ip_protocol is set to -1, it translates to all protocols, all port ranges, and from_port and to_port values should not be defined.
-    ip_protocol    = "-1"
-    cidr_ipv4 = var.cidr_block
-}
 
-resource "aws_vpc_security_group_egress_rule" "ecs_task" {
-  security_group_id = aws_security_group.ecs_task.id
-    # Use -1 to specify all protocols. 
-    # Note that if ip_protocol is set to -1, it translates to all protocols, all port ranges, and from_port and to_port values should not be defined.
-    ip_protocol    = "-1"
-    cidr_ipv4 = "0.0.0.0/0"
-}
 
 resource "aws_security_group" "ecs_task" {
   name_prefix = "ecs-task-sg-"
@@ -100,6 +86,22 @@ resource "aws_security_group" "ecs_task" {
   #   protocol    = "-1"
   #   cidr_blocks = ["0.0.0.0/0"]
   # }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "ecs_task" {
+  security_group_id = aws_security_group.ecs_task.id
+    # Use -1 to specify all protocols. 
+    # Note that if ip_protocol is set to -1, it translates to all protocols, all port ranges, and from_port and to_port values should not be defined.
+    ip_protocol    = "-1"
+    cidr_ipv4 = var.cidr_block
+}
+
+resource "aws_vpc_security_group_egress_rule" "ecs_task" {
+  security_group_id = aws_security_group.ecs_task.id
+    # Use -1 to specify all protocols. 
+    # Note that if ip_protocol is set to -1, it translates to all protocols, all port ranges, and from_port and to_port values should not be defined.
+    ip_protocol    = "-1"
+    cidr_ipv4 = "0.0.0.0/0"
 }
 # creates the application load balancer which distributes traffic
 resource "aws_lb" "main" {

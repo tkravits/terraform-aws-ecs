@@ -20,11 +20,13 @@ variable "ecs_cluster" {
 variable "alb_target_group" {
   
 }
-variable "cloudwatch_logs" {
-
+variable "cloudwatch_logs_name" {
+  description = "CloudWatch log group for ECS tasks"
+  type        = string
 }
-variable "ecr" {
-  
+variable "ecr_url" {
+  description = "ECR repository URI for the application image"
+  type        = string
 }
 variable "security_group_ecs_task" {
   

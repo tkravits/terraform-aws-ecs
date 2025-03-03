@@ -36,33 +36,6 @@ resource "aws_iam_instance_profile" "ecs_node" {
   role        = aws_iam_role.ecs_node_role.name
 }
 
-# --- ECS Node SG ---
-# creates a security group
-# Security groups are required to control traffic going to and from EC2 instances
-# resource "aws_security_group" "ecs_node_sg" {
-#   name_prefix = "demo-ecs-node-sg-"
-#   vpc_id      = var.vpc_id
-
-#   # egress {
-#   #   from_port   = 0
-#   #   to_port     = 65535
-#   #   protocol    = "tcp"
-#   #   cidr_blocks = ["0.0.0.0/0"]
-#   # }
-# }
-
-# Manages an outbound (egress) rule for a security group. Was defining inline for hte ecs_node security group but
-# Terraform best practice recommends separating them as 
-# "they struggle with managing multiple CIDR blocks, and tags and descriptions due to the historical lack of unique IDs."
-# By default AWS security groups allow all outbound traffic but explicitly defining the rule is better for the user
-# resource "aws_vpc_security_group_egress_rule" "ecs_node_sg" {
-#   security_group_id = aws_security_group.ecs_node_sg.id
-
-#     from_port   = 0
-#     to_port     = 65535
-#     ip_protocol    = "tcp"
-#     cidr_ipv4 = "0.0.0.0/0"
-# }
 # --- ECS Launch Template ---
 # Retrieves the latest Amazon ECS-Optimized AMI for Amazon Linux 2 from AWS Systems Manager (SSM)
 data "aws_ssm_parameter" "ecs_node_ami" {
@@ -73,7 +46,7 @@ resource "aws_launch_template" "ecs_ec2" {
   name_prefix            = "demo-ecs-ec2-"
   image_id               = data.aws_ssm_parameter.ecs_node_ami.value
   instance_type          = "t2.micro"
-  vpc_security_group_ids = [var.ecs_node_sg.ecs_node_sg.id]
+  vpc_security_group_ids = [var.ecs_node_sg.id]
   # uses the same instance profile and attaches it to the EC2 instance
   iam_instance_profile { arn = aws_iam_instance_profile.ecs_node.arn }
   # enables cloud monitoring
@@ -82,7 +55,7 @@ resource "aws_launch_template" "ecs_ec2" {
   # runs a script that connects the EC2 instance to the ECS cluster created
   user_data = base64encode(<<-EOF
       #!/bin/bash
-      echo ECS_CLUSTER=${var.ecs_cluster.main.name} >> /etc/ecs/ecs.config;
+      echo ECS_CLUSTER=${var.ecs_cluster.name} >> /etc/ecs/ecs.config;
     EOF
   )
 }
@@ -177,12 +150,12 @@ resource "aws_iam_role" "ecs_exec_role" {
   name_prefix        = "demo-ecs-exec-role"
   assume_role_policy = data.aws_iam_policy_document.ecs_task_doc.json
 }
-# # AWS has a specific role found in the policy ARN, create this policy attachment and 
-# # attach it to the ecs_exec role
-# resource "aws_iam_role_policy_attachment" "ecs_exec_role_policy" {
-#   role       = aws_iam_role.ecs_exec_role.name
-#   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-# }
+# AWS has a specific role found in the policy ARN, create this policy attachment and 
+# attach it to the ecs_exec role
+resource "aws_iam_role_policy_attachment" "ecs_exec_role_policy" {
+  role       = aws_iam_role.ecs_exec_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
 
 # --- ECS Task Definition ---
 # Creates the task definition that tells ECS how to run the image
@@ -202,7 +175,7 @@ resource "aws_ecs_task_definition" "app" {
   # pulls the latest image from the elastic container registry
   container_definitions = jsonencode([{
     name         = "app",
-    image        = "${var.ecr.repository_url}:latest",
+    image        = "${var.ecr_url}:latest",
     # if the container fails, restart
     essential    = true,
     portMappings = [{ containerPort = 80, hostPort = 80 }],
@@ -216,50 +189,12 @@ resource "aws_ecs_task_definition" "app" {
       logDriver = "awslogs",
       options = {
         "awslogs-region"        = "us-east-1",
-        "awslogs-group"         = var.cloudwatch_logs.ecs.name,
+        "awslogs-group"         = var.cloudwatch_logs_name,
         "awslogs-stream-prefix" = "app"
       }
     },
   }])
 }
-
-# --- ECS Service ---
-
-# resource "aws_security_group" "ecs_task" {
-#   name_prefix = "ecs-task-sg-"
-#   description = "Allow all traffic within the VPC"
-#   vpc_id      = var.vpc_id
-
-#   # ingress {
-#   #   from_port   = 0
-#   #   to_port     = 0
-#   #   protocol    = "-1"
-#   #   cidr_blocks = [var.cidr_block]
-#   # }
-
-#   # egress {
-#   #   from_port   = 0
-#   #   to_port     = 0
-#   #   protocol    = "-1"
-#   #   cidr_blocks = ["0.0.0.0/0"]
-#   # }
-# }
-
-# resource "aws_vpc_security_group_ingress_rule" "ecs_task" {
-#   security_group_id = aws_security_group.ecs_task.id
-#     # Use -1 to specify all protocols. 
-#     # Note that if ip_protocol is set to -1, it translates to all protocols, all port ranges, and from_port and to_port values should not be defined.
-#     ip_protocol    = "-1"
-#     cidr_ipv4 = var.cidr_block
-# }
-
-# resource "aws_vpc_security_group_egress_rule" "ecs_task" {
-#   security_group_id = aws_security_group.ecs_task.id
-#     # Use -1 to specify all protocols. 
-#     # Note that if ip_protocol is set to -1, it translates to all protocols, all port ranges, and from_port and to_port values should not be defined.
-#     ip_protocol    = "-1"
-#     cidr_ipv4 = "0.0.0.0/0"
-# }
 
 # Creates the ECS service which orchestrates the desired number of tasks is running at all times
 # this is looking to have 2 tasks running at all times
@@ -298,34 +233,3 @@ resource "aws_ecs_service" "app_ec2" {
     container_port   = 80
   }
 }
-
-
-# # Creates the ECS service which orchestrates the desired number of tasks is running at all times
-# # this is looking to have 2 tasks running at all times
-# resource "aws_ecs_service" "app_fargate" {
-#   count           = var.ecs_launch_type == "FARGATE" ? 1 : 0
-#   name            = "app"
-#   cluster         = aws_ecs_cluster.main.id
-#   task_definition = aws_ecs_task_definition.app.arn
-#   desired_count   = 2
-#   # where the tasks should run and the SG associated with the tasks
-#   network_configuration {
-#     security_groups = [aws_security_group.ecs_task.id]
-#     subnets         = var.subnets[*].id
-#   }
-
-#   launch_type = "FARGATE"
-
-#   lifecycle {
-#     ignore_changes = [desired_count]
-#   }
-#   # make sure the load balancer is created first then routes traffic to port 80
-#   depends_on = [aws_lb_target_group.app]
-
-#   load_balancer {
-#     target_group_arn = aws_lb_target_group.app.arn
-#     container_name   = "app"
-#     container_port   = 80
-#   }
-# }
-
