@@ -2,10 +2,10 @@ variable "vpc_id" {
   description = "The ID of the VPC where ECS instances will be deployed"
   type        = string
 }
-variable "cidr_block" {
-  description = "The IPv4 CIDR block for the VPC"
-  type        = string
-}
+# variable "cidr_block" {
+#   description = "The IPv4 CIDR block for the VPC"
+#   type        = string
+# }
 variable "subnets" {
   description = "a list of subnets"
   type = list(object({
@@ -14,11 +14,19 @@ variable "subnets" {
 }
 
 variable "ecs_cluster" {
-  
+  description = "Information for the ECS cluster"
+  type        = object({
+    name = string
+    id = string
+  })
 }
 
 variable "alb_target_group" {
-  
+  description = "ARN of the ALB Target Group"
+  type        = object({
+    name = string
+    arn = string
+  })
 }
 variable "cloudwatch_logs_name" {
   description = "CloudWatch log group for ECS tasks"
@@ -29,8 +37,13 @@ variable "ecr_url" {
   type        = string
 }
 variable "security_group_ecs_task" {
-  
+  description = "Security Group ID for ECS tasks"
+  type        = object({
+    name = string
+    id = string
+  })
 }
+
 variable "ecs_launch_type" {
   description = "Choose between 'EC2' and 'FARGATE' for ECS deployment"
   type        = string

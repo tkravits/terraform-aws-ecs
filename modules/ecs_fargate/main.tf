@@ -2,6 +2,17 @@
 # creates the policy document for ECS tasks so they can assume the IAM role.
 # This will be assigned to the ecs_task_role to make it more readable that
 # the IAM is assuming this role
+data "aws_iam_policy_document" "ecs_exec_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    effect  = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
 data "aws_iam_policy_document" "ecs_task_doc" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -13,7 +24,6 @@ data "aws_iam_policy_document" "ecs_task_doc" {
     }
   }
 }
-
 # creates the ECS task role and uses the above policy
 resource "aws_iam_role" "ecs_task_role" {
   name_prefix        = "demo-ecs-task-role"
@@ -22,7 +32,7 @@ resource "aws_iam_role" "ecs_task_role" {
 # creates the ECS execution role
 resource "aws_iam_role" "ecs_exec_role" {
   name_prefix        = "demo-ecs-exec-role"
-  assume_role_policy = data.aws_iam_policy_document.ecs_task_doc.json
+  assume_role_policy = data.aws_iam_policy_document.ecs_exec_role.json
 }
 # AWS has a specific role found in the policy ARN, create this policy attachment and 
 # attach it to the ecs_exec role
@@ -53,7 +63,8 @@ resource "aws_ecs_task_definition" "app" {
     image        = "${var.ecr_url}:latest",
     # if the container fails, restart
     essential    = true,
-    portMappings = [{ containerPort = 80, hostPort = 80 }],
+    # host port is always mapped with awsvpc
+    portMappings = [{ containerPort = 80 }],
     # add environment variables to the container
     environment = [
       { name = "EXAMPLE", value = "example" }
