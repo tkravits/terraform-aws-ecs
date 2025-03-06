@@ -41,10 +41,14 @@ resource "aws_iam_role_policy_attachment" "ecs_exec_role_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+resource "aws_iam_role_policy_attachment" "ecs_task_role_policy" {
+  role       = aws_iam_role.ecs_task_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
 # --- ECS Task Definition ---
 # Creates the task definition that tells ECS how to run the image
 resource "aws_ecs_task_definition" "app" {
-  family             = "demo-app"
+  family             = "demo-app-fargate"
   # role for the running container
   task_role_arn      = aws_iam_role.ecs_task_role.arn
   # role for the ecs agent which pulls the image
@@ -94,6 +98,7 @@ resource "aws_ecs_service" "app_fargate" {
   network_configuration {
     security_groups = [var.security_group_ecs_task.id]
     subnets         = var.subnets[*].id
+    assign_public_ip = "true"
   }
 
   launch_type = "FARGATE"
