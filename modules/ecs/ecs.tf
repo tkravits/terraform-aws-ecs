@@ -7,17 +7,10 @@ resource "aws_ecs_cluster" "main" {
 
 # --- ECS Node SG ---
 # creates a security group
-# Security groups are required to control traffic going to and from EC2 instances
+# Security groups are required to control traffic going to and from resources
 resource "aws_security_group" "ecs_node_sg" {
   name_prefix = "demo-ecs-node-sg-"
   vpc_id      = var.vpc_id
-
-  # egress {
-  #   from_port   = 0
-  #   to_port     = 65535
-  #   protocol    = "tcp"
-  #   cidr_blocks = ["0.0.0.0/0"]
-  # }
 }
 
 # Manages an outbound (egress) rule for a security group. Was defining inline for the ecs_node security group but
@@ -49,13 +42,6 @@ resource "aws_security_group" "http" {
       cidr_blocks = ["0.0.0.0/0"]
     }
   }
-
-  # egress {
-  #   protocol    = "-1"
-  #   from_port   = 0
-  #   to_port     = 0
-  #   cidr_blocks = ["0.0.0.0/0"]
-  # }
 }
 
 resource "aws_vpc_security_group_egress_rule" "http" {
@@ -73,19 +59,6 @@ resource "aws_security_group" "ecs_task" {
   description = "Allow all traffic within the VPC"
   vpc_id      = var.vpc_id
 
-  # ingress {
-  #   from_port   = 0
-  #   to_port     = 0
-  #   protocol    = "-1"
-  #   cidr_blocks = [var.cidr_block]
-  # }
-
-  # egress {
-  #   from_port   = 0
-  #   to_port     = 0
-  #   protocol    = "-1"
-  #   cidr_blocks = ["0.0.0.0/0"]
-  # }
 }
 
 resource "aws_vpc_security_group_ingress_rule" "ecs_task" {

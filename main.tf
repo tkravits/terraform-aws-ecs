@@ -38,7 +38,6 @@ module "ecs_ec2" {
   security_group_ecs_task = module.ecs.security_group_ecs_task
   cloudwatch_logs_name    = module.cloudwatch.ecs_cloudwatch_logs_name
   vpc_id                  = module.vpc.aws_vpc.id
-  # cidr_block              = module.vpc.aws_vpc.cidr_block
   subnets                 = module.vpc.aws_subnets
   ecs_launch_type         = var.ecs_launch_type
 }
@@ -53,7 +52,6 @@ module "ecs_fargate" {
   security_group_ecs_task = module.ecs.security_group_ecs_task
   ecr_url                 = module.ecs.ecr_url
   vpc_id                  = module.vpc.aws_vpc.id
-  # cidr_block              = module.vpc.aws_vpc.cidr_block
   subnets                 = module.vpc.aws_subnets
   ecs_launch_type         = var.ecs_launch_type
 }
