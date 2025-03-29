@@ -16,3 +16,13 @@ Then we will need to connect our ECR to our local environment to push a docker i
 After all the resources are created and the ECR has the docker image, run 
 `curl $(terraform output --raw alb_url)`
 which will perform a GET to the application load balancer and serve back the hostname
+
+## NOTES
+For some reason, either through debugging or some misconfiguration, there were Fargate tasks that were connected, but not running. Which ended up charging me 50 cents per day for 2 weeks. Also, the elastic IP was still attached, which I was getting charged for a public ip4.
+
+Check Fargate tasks by running 
+`aws ecs list-tasks --cluster demo-cluster --desired-status RUNNING`
+`aws ecs stop-task --cluster demo-cluster --task <TASK ARN>`
+Check EIP 
+`aws ec2 describe-addresses --region us-east-1 --query "Addresses[*].[PublicIp,AssociationId,InstanceId,NetworkInterfaceId]" --output table`
+`aws ec2 disassociate-address --association-id <ASSOCIATION_ID> --region us-east-1`
